@@ -33,7 +33,7 @@ our $PERLDOC =
   Mojo::Asset::File->new(path => File::Spec->catfile($T, 'perldoc.html.ep'))
   ->slurp;
 
-# "Futurama - The One Bright Spot in Your Life!."
+# "Futurama - The One Bright Spot in Your Life!"
 sub register {
   my ($self, $app, $conf) = @_;
 
@@ -255,7 +255,7 @@ Handler name of preprocessor.
   # Mojolicious::Lite
   plugin doc_renderer => {url => '/mydoc'};
 
-URL from which the documentation of your projects is available. Default is I</doc>.
+URL from which the documentation of your project is available. Default is I</doc>.
 
 =head1 METHODS
 
