@@ -27,6 +27,11 @@ Mojolicious::Plugin::DocRenderer - Doc Renderer Plugin
     shift->plugin( 'doc_renderer' );
   }
 
+  sub startup {
+    my $self = shift;
+    # some code
+  }
+
   __END__
 
   =head1 NAME
@@ -85,7 +90,7 @@ Handler name of preprocessor.
   # Mojolicious::Lite
   plugin doc_renderer => {url => '/mydoc'};
 
-URL from which the documentation of your projects is available. Default is I</doc>.
+URL from which the documentation of your project is available. Default is I</doc>.
 
 =head1 METHODS
 
