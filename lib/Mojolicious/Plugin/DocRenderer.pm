@@ -197,6 +197,11 @@ Mojolicious::Plugin::DocRenderer - Doc Renderer Plugin
     shift->plugin( 'doc_renderer' );
   }
 
+  sub startup {
+    my $self = shift;
+    # some code
+  }
+
   __END__
 
   =head1 NAME
