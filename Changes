@@ -1,2 +1,7 @@
+1.0     2011-08-20 00:00:00
+        - Renamed to Mojolicious::Plugin::DOCRenderer.
+        - Improved documentation.
+        - Better tests.
+
 1.0     2011-08-13 00:00:00
         - First release.

@@ -10,8 +10,8 @@ use ExtUtils::MakeMaker;
 my ($mm) = $ExtUtils::MakeMaker::VERSION =~ /^([^_]+)/;
 
 WriteMakefile(
-  NAME         => 'Mojolicious::Plugin::DocRenderer',
-  VERSION_FROM => 'lib/Mojolicious/Plugin/DocRenderer.pm',
+  NAME         => 'Mojolicious::Plugin::DOCRenderer',
+  VERSION_FROM => 'lib/Mojolicious/Plugin/DOCRenderer.pm',
   ABSTRACT     => 'Browses online documentation of your Mojolicious application',
   AUTHOR       => 'Viliam Pucik <viliam.pucik@gmail.com>',
 
