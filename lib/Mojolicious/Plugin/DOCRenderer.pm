@@ -9,7 +9,7 @@ use Mojo::ByteStream 'b';
 use Mojo::DOM;
 use Mojo::Util 'url_escape';
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 # Core module since Perl 5.9.3, so it might not always be present
 BEGIN {
