@@ -1,6 +1,4 @@
-#!/usr/bin/env perl
-
-use 5.008007;
+use 5.010001;
 
 use strict;
 use warnings;
@@ -21,7 +19,7 @@ WriteMakefile(
     ? ()
     : (
       META_MERGE => {
-        requires  => {perl => '5.008007'},
+        requires  => {perl => '5.010001'},
         resources => {
           homepage    => 'https://github.com/viliampucik/Mojolicious-Plugin-DocRenderer',
           license     => 'http://dev.perl.org/licenses/',
@@ -36,6 +34,6 @@ WriteMakefile(
     )
   ),
 
-  PREREQ_PM    => { 'Mojolicious' => '1.80' },
+  PREREQ_PM    => { 'Mojolicious' => '2.48' },
   test         => { TESTS => 't/*.t' }
 );

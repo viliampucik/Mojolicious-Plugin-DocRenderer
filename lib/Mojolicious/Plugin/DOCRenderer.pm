@@ -1,37 +1,18 @@
 package Mojolicious::Plugin::DOCRenderer;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use File::Basename 'dirname';
-use File::Spec;
 use IO::File;
 use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
 use Mojo::Util 'url_escape';
-
-our $VERSION = '1.02';
-
-# Core module since Perl 5.9.3, so it might not always be present
-BEGIN {
-  die <<'EOF' unless eval { require Pod::Simple::HTML; 1 } }
-Module "Pod::Simple" not present in this version of Perl.
-Please install it manually or upgrade Perl to at least version 5.10.
-EOF
-
+use Pod::Simple::HTML;
 use Pod::Simple::Search;
 
-# Template directory
-my $T = File::Spec->catdir(dirname(__FILE__), '..', 'templates');
+our $VERSION = '2.00';
 
-# Mojobar template
-our $MOJOBAR =
-  Mojo::Asset::File->new(path => File::Spec->catfile($T, 'mojobar.html.ep'))
-  ->slurp;
-
-# doc template
-our $PERLDOC =
-  Mojo::Asset::File->new(path => File::Spec->catfile($T, 'perldoc.html.ep'))
-  ->slurp;
+# Bundled files
+our $PERLDOC = $Mojolicious::Controller::H->slurp_rel_file('perldoc.html.ep');
 
 # "Futurama - The One Bright Spot in Your Life!"
 sub register {
@@ -62,7 +43,7 @@ sub register {
 
       # Find module
       my $module = $self->param('module');
-      $module =~ s/\//\:\:/g;
+      $module =~ s|/|\:\:|g;
       my $path = Pod::Simple::Search->new->find($module, @INC);
 
       # Redirect to CPAN
@@ -79,16 +60,17 @@ sub register {
       $dom->find('a[href]')->each(
         sub {
           my $attrs = shift->attrs;
-          $attrs->{href} =~ s/%3A%3A/\//gi
+          $attrs->{href} =~ s|%3A%3A|/|gi
             if $attrs->{href}
-              =~ s/^http\:\/\/search\.cpan\.org\/perldoc\?/$doc/;
+              =~ s|^http\://search\.cpan\.org/perldoc\?|$doc|;
         }
       );
 
       # Rewrite code sections for syntax highlighting
       $dom->find('pre')->each(
         sub {
-          my $attrs = shift->attrs;
+          return if (my $e = shift)->all_text =~ /^\s*\$\s+/m;
+          my $attrs = $e->attrs;
           my $class = $attrs->{class};
           $attrs->{class} =
             defined $class ? "$class prettyprint" : 'prettyprint';
@@ -97,19 +79,18 @@ sub register {
 
       # Rewrite headers
       my $url = $self->req->url->clone;
-      $url =~ s/%2F/\//gi;
+      $url =~ s|%2F|/|gi;
       my $sections = [];
       $dom->find('h1, h2, h3')->each(
         sub {
-          my $tag    = shift;
-          my $text   = $tag->all_text;
-          my $anchor = $text;
+          my $e = shift;
+          my $anchor = my $text = $e->all_text;
           $anchor =~ s/\s+/_/g;
-          url_escape $anchor, 'A-Za-z0-9_';
+          $anchor = url_escape $anchor, 'A-Za-z0-9_';
           $anchor =~ s/\%//g;
-          push @$sections, [] if $tag->type eq 'h1' || !@$sections;
+          push @$sections, [] if $e->type eq 'h1' || !@$sections;
           push @{$sections->[-1]}, $text, $url->fragment($anchor)->to_abs;
-          $tag->replace_content(
+          $e->replace_content(
             $self->link_to(
               $text => $url->fragment('toc')->to_abs,
               class => 'mojoscroll',
@@ -124,9 +105,7 @@ sub register {
       $dom->find('h1 + p')->first(sub { $title = shift->text });
 
       # Combine everything to a proper response
-      $self->content_for(mojobar => $self->include(inline => $MOJOBAR));
       $self->content_for(perldoc => "$dom");
-      $self->app->plugins->run_hook(before_perldoc => $self);
       $self->render(
         inline   => $PERLDOC,
         title    => $title,
@@ -158,8 +137,8 @@ sub _pod_to_html {
   return $@ if $@;
 
   # Filter
-  $output =~ s/<a name='___top' class='dummyTopAnchor'\s*?><\/a>\n//g;
-  $output =~ s/<a class='u'.*?name=".*?"\s*>(.*?)<\/a>/$1/sg;
+  $output =~ s|<a name='___top' class='dummyTopAnchor'\s*?></a>\n||g;
+  $output =~ s|<a class='u'.*?name=".*?"\s*>(.*?)</a>|$1|sg;
 
   return $output;
 }
@@ -196,7 +175,7 @@ Mojolicious::Plugin::DOCRenderer - Doc Renderer Plugin
 
   plugin 'DOCRenderer' => {
       # use this script base name as a default module to show for "/doc"
-      module => fileparse( __FILE__, qr/\.pl/ )
+      module => fileparse( __FILE__, qr/\.[^.]*/ );
   };
 
   app->start;

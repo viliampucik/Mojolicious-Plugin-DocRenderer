@@ -12,16 +12,13 @@ BEGIN {
   $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
 }
 
-use Test::More;
-plan skip_all => 'Perl 5.10 or Pod::Simple required for this test!'
-  unless eval { require Pod::Simple::HTML; 1 };
-plan tests => 9;
+use Test::More tests => 9;
 
 use Mojolicious::Lite;
 use File::Basename;
 use Test::Mojo;
 
-my $module = fileparse( __FILE__, qr/\.pl/ );
+my $module = basename __FILE__;
 
 # DOC renderer plugin
 plugin 'DOCRenderer' => {
