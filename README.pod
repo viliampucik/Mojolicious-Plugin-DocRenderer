@@ -26,7 +26,7 @@ Mojolicious::Plugin::DOCRenderer - Doc Renderer Plugin
 
   plugin 'DOCRenderer' => {
       # use this script base name as a default module to show for "/doc"
-      module => fileparse( __FILE__, qr/\.pl/ )
+      module => fileparse( __FILE__, qr/\.[^.]*/ );
   };
 
   app->start;
