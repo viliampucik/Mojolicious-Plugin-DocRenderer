@@ -1,7 +1,8 @@
 package Mojolicious::Plugin::DOCRenderer;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use IO::File;
+use File::Basename 'dirname';
+use File::Spec::Functions 'catdir';
 use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
@@ -9,116 +10,117 @@ use Mojo::Util 'url_escape';
 use Pod::Simple::HTML;
 use Pod::Simple::Search;
 
-our $VERSION = '2.00';
+our $VERSION = '3.00';
 
-# Bundled files
-our $PERLDOC = $Mojolicious::Controller::H->slurp_rel_file('perldoc.html.ep');
+# Paths
+my @PATHS = map { $_, "$_/pods" } @INC;
 
 # "Futurama - The One Bright Spot in Your Life!"
 sub register {
   my ($self, $app, $conf) = @_;
 
-  # Config
-  $conf ||= {};
-  my $app_module = $conf->{module}     || $ENV{MOJO_APP};
-  my $name       = $conf->{name}       || 'doc';
+  # Add "doc" handler
   my $preprocess = $conf->{preprocess} || 'ep';
-  my $url        = $conf->{url}        || '/doc';
-
-  # Add "pod" handler
   $app->renderer->add_handler(
-    $name => sub {
+    $conf->{name} || 'doc' => sub {
       my ($r, $c, $output, $options) = @_;
 
-      # Preprocess with ep and then render
-      $$output = _pod_to_html($$output)
-        if $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      # Preprocess and render
+      return unless $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      $$output = _pod_to_html($$output);
+      return 1;
     }
   );
 
-  # Perldoc
-  $app->routes->any(
-    "$url/(*module)" => {module => $app_module} => sub {
-      my $self = shift;
+  # Append "templates" and "public" directories
+  my $base = catdir(dirname(__FILE__), 'DOCRenderer');
+  push @{$app->renderer->paths}, catdir($base, 'templates');
 
-      # Find module
-      my $module = $self->param('module');
-      $module =~ s|/|\:\:|g;
-      my $path = Pod::Simple::Search->new->find($module, @INC);
+  # Doc
+  my $url    = $conf->{url}    || '/doc';
+  my $module = $conf->{module} || $ENV{MOJO_APP};
+  return $app->routes->any(
+    "$url/*module" => {url => $url, module => $module} => \&_doc);
+}
 
-      # Redirect to CPAN
-      return $self->redirect_to("http://metacpan.org/module/$module")
-        unless $path && -r $path;
+sub _doc {
+  my $self = shift;
 
-      # Turn POD into HTML
-      my $file = IO::File->new("< $path");
-      my $html = _pod_to_html(join '', <$file>);
+  # Find module
+  my $module = $self->param('module');
+  $module =~ s!/!\:\:!g;
+  my $path = Pod::Simple::Search->new->find($module, @PATHS);
 
-      # Rewrite links
-      my $dom = Mojo::DOM->new("$html");
-      my $doc = $self->url_for("$url/");
-      $dom->find('a[href]')->each(
-        sub {
-          my $attrs = shift->attrs;
-          $attrs->{href} =~ s|%3A%3A|/|gi
-            if $attrs->{href}
-              =~ s|^http\://search\.cpan\.org/perldoc\?|$doc|;
-        }
-      );
+  # Redirect to CPAN
+  return $self->redirect_to("http://metacpan.org/module/$module")
+    unless $path && -r $path;
 
-      # Rewrite code sections for syntax highlighting
-      $dom->find('pre')->each(
-        sub {
-          return if (my $e = shift)->all_text =~ /^\s*\$\s+/m;
-          my $attrs = $e->attrs;
-          my $class = $attrs->{class};
-          $attrs->{class} =
-            defined $class ? "$class prettyprint" : 'prettyprint';
-        }
-      );
+  # Turn POD into HTML
+  open my $file, '<', $path;
+  my $html = _pod_to_html(join '', <$file>);
 
-      # Rewrite headers
-      my $url = $self->req->url->clone;
-      $url =~ s|%2F|/|gi;
-      my $sections = [];
-      $dom->find('h1, h2, h3')->each(
-        sub {
-          my $e = shift;
-          my $anchor = my $text = $e->all_text;
-          $anchor =~ s/\s+/_/g;
-          $anchor = url_escape $anchor, 'A-Za-z0-9_';
-          $anchor =~ s/\%//g;
-          push @$sections, [] if $e->type eq 'h1' || !@$sections;
-          push @{$sections->[-1]}, $text, $url->fragment($anchor)->to_abs;
-          $e->replace_content(
-            $self->link_to(
-              $text => $url->fragment('toc')->to_abs,
-              class => 'mojoscroll',
-              id    => $anchor
-            )
-          );
-        }
-      );
-
-      # Try to find a title
-      my $title = 'Doc';
-      $dom->find('h1 + p')->first(sub { $title = shift->text });
-
-      # Combine everything to a proper response
-      $self->content_for(perldoc => "$dom");
-      $self->render(
-        inline   => $PERLDOC,
-        title    => $title,
-        sections => $sections
-      );
-      $self->res->headers->content_type('text/html;charset="UTF-8"');
+  # Rewrite links
+  my $dom = Mojo::DOM->new("$html");
+  my $doc = $self->url_for( $self->param('url') . '/' );
+  $dom->find('a[href]')->each(
+    sub {
+      my $attrs = shift->attrs;
+      $attrs->{href} =~ s!%3A%3A!/!gi
+        if $attrs->{href} =~ s!^http\://search\.cpan\.org/perldoc\?!$doc!;
     }
-  ) unless $conf->{no_doc};
+  );
+
+  # Rewrite code blocks for syntax highlighting
+  $dom->find('pre')->each(
+    sub {
+      my $e = shift;
+      return if $e->all_text =~ /^\s*\$\s+/m;
+      my $attrs = $e->attrs;
+      my $class = $attrs->{class};
+      $attrs->{class} = defined $class ? "$class prettyprint" : 'prettyprint';
+    }
+  );
+
+  # Rewrite headers
+  my $url = $self->req->url->clone;
+  my (%anchors, @parts);
+  $dom->find('h1, h2, h3')->each(
+    sub {
+      my $e = shift;
+
+      # Anchor and text
+      my $name = my $text = $e->all_text;
+      $name =~ s/\s+/_/g;
+      $name =~ s/\W//g;
+      my $anchor = $name;
+      my $i      = 1;
+      $anchor = $name . $i++ while $anchors{$anchor}++;
+
+      # Rewrite
+      push @parts, [] if $e->type eq 'h1' || !@parts;
+      push @{$parts[-1]}, $text, $url->fragment($anchor)->to_abs;
+      $e->replace_content(
+        $self->link_to(
+          $text => $url->fragment('toc')->to_abs,
+          class => 'mojoscroll',
+          id    => $anchor
+        )
+      );
+    }
+  );
+
+  # Try to find a title
+  my $title = 'Doc';
+  $dom->find('h1 + p')->first(sub { $title = shift->text });
+
+  # Combine everything to a proper response
+  $self->content_for(doc => "$dom");
+  $self->render(template => 'doc', title => $title, parts => \@parts);
+  $self->res->headers->content_type('text/html;charset="UTF-8"');
 }
 
 sub _pod_to_html {
-  my $pod = shift;
-  return unless defined $pod;
+  return unless defined(my $pod = shift);
 
   # Block
   $pod = $pod->() if ref $pod eq 'CODE';
@@ -131,14 +133,12 @@ sub _pod_to_html {
   $parser->html_footer('');
 
   # Parse
-  my $output;
-  $parser->output_string(\$output);
-  eval { $parser->parse_string_document("$pod") };
-  return $@ if $@;
+  $parser->output_string(\(my $output));
+  return $@ unless eval { $parser->parse_string_document("$pod"); 1 };
 
   # Filter
-  $output =~ s|<a name='___top' class='dummyTopAnchor'\s*?></a>\n||g;
-  $output =~ s|<a class='u'.*?name=".*?"\s*>(.*?)</a>|$1|sg;
+  $output =~ s!<a name='___top' class='dummyTopAnchor'\s*?></a>\n!!g;
+  $output =~ s!<a class='u'.*?name=".*?"\s*>(.*?)</a>!$1!sg;
 
   return $output;
 }
@@ -248,14 +248,6 @@ case you should set C<module>, see Mojolicious::Lite example.
 
 Handler name.
 
-=head2 C<no_doc>
-
-  # Mojolicious::Lite
-  plugin DOCRenderer => {no_doc => 1};
-
-Disable doc browser.
-Note that this option is EXPERIMENTAL and might change without warning!
-
 =head2 C<preprocess>
 
   # Mojolicious::Lite
@@ -277,7 +269,8 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  my $route = $plugin->register(Mojolicious->new);
+  my $route = $plugin->register(Mojolicious->new, {name => 'foo'});
 
 Register renderer in L<Mojolicious> application.
 

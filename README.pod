@@ -99,14 +99,6 @@ case you should set C<module>, see Mojolicious::Lite example.
 
 Handler name.
 
-=head2 C<no_doc>
-
-  # Mojolicious::Lite
-  plugin DOCRenderer => {no_doc => 1};
-
-Disable doc browser.
-Note that this option is EXPERIMENTAL and might change without warning!
-
 =head2 C<preprocess>
 
   # Mojolicious::Lite
@@ -128,7 +120,8 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  my $route = $plugin->register(Mojolicious->new);
+  my $route = $plugin->register(Mojolicious->new, {name => 'foo'});
 
 Register renderer in L<Mojolicious> application.
 

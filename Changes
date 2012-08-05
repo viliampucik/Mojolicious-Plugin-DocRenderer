@@ -1,3 +1,9 @@
+3.00    2012-08-05 00:00:00
+        - Updated based on the latest Mojolicious::Plugin::DOCRenderer from
+          Mojolicious 3.20.
+        - Added embedded templates.
+        - Removed experimental 'no_doc' option.
+
 2.00    2012-02-10 00:00:00
         - Updated based on the latest Mojolicious::Plugin::DOCRenderer from
           Mojolicious 2.48.
