@@ -10,7 +10,7 @@ use Mojo::Util 'url_escape';
 use Pod::Simple::HTML;
 use Pod::Simple::Search;
 
-our $VERSION = '3.00';
+our $VERSION = '3.01';
 
 # Paths
 my @PATHS = map { $_, "$_/pods" } @INC;
