@@ -64,7 +64,7 @@ sub _doc {
   my $doc = $self->url_for( $self->param('url') . '/' );
   $dom->find('a[href]')->each(
     sub {
-      my $attrs = shift->attrs;
+      my $attrs = shift->attr;
       $attrs->{href} =~ s!%3A%3A!/!gi
         if $attrs->{href} =~ s!^http\://search\.cpan\.org/perldoc\?!$doc!;
     }
@@ -75,7 +75,7 @@ sub _doc {
     sub {
       my $e = shift;
       return if $e->all_text =~ /^\s*\$\s+/m;
-      my $attrs = $e->attrs;
+      my $attrs = $e->attr;
       my $class = $attrs->{class};
       $attrs->{class} = defined $class ? "$class prettyprint" : 'prettyprint';
     }
