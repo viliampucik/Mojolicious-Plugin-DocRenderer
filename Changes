@@ -1,3 +1,6 @@
+3.02    2013-11-14 00:00:00
+        - Changed call to Mojo::DOM->attrs to Mojo::DOM->attr, as the attrs method has been deprecated and now removed (highflying).
+
 3.01    2012-08-19 00:00:00
         - Makefile.PL cleanup.
 
