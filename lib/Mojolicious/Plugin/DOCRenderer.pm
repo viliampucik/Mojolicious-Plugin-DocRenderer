@@ -6,14 +6,12 @@ use File::Spec::Functions 'catdir';
 use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
-use Mojo::Util 'url_escape';
+use Mojo::URL;
+use Mojo::Util qw(slurp unindent url_escape);
 use Pod::Simple::HTML;
 use Pod::Simple::Search;
 
-our $VERSION = '3.02';
-
-# Paths
-my @PATHS = map { $_, "$_/pods" } @INC;
+our $VERSION = '4.00';
 
 # "Futurama - The One Bright Spot in Your Life!"
 sub register {
@@ -23,91 +21,68 @@ sub register {
   my $preprocess = $conf->{preprocess} || 'ep';
   $app->renderer->add_handler(
     $conf->{name} || 'doc' => sub {
-      my ($r, $c, $output, $options) = @_;
+      my ($renderer, $c, $output, $options) = @_;
 
       # Preprocess and render
-      return unless $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      my $handler = $renderer->handlers->{$preprocess};
+      return undef unless $handler->($renderer, $c, $output, $options);
       $$output = _pod_to_html($$output);
       return 1;
     }
   );
 
   # Append "templates" and "public" directories
-  my $base = catdir(dirname(__FILE__), 'DOCRenderer');
-  push @{$app->renderer->paths}, catdir($base, 'templates');
+  push @{$app->renderer->paths}, catdir(dirname(__FILE__), 'DOCRenderer', 'templates');
 
   # Doc
   my $url    = $conf->{url}    || '/doc';
   my $module = $conf->{module} || $ENV{MOJO_APP};
+  my $defaults = {url => $url, module => $module, format => 'html'};
   return $app->routes->any(
-    "$url/*module" => {url => $url, module => $module} => \&_doc);
+    "$url/:module" => $defaults => [module => qr/[^.]+/] => \&_doc);
 }
 
-sub _doc {
-  my $self = shift;
-
-  # Find module
-  my $module = $self->param('module');
-  $module =~ s!/!\:\:!g;
-  my $path = Pod::Simple::Search->new->find($module, @PATHS);
-
-  # Redirect to CPAN
-  return $self->redirect_to("http://metacpan.org/module/$module")
-    unless $path && -r $path;
-
-  # Turn POD into HTML
-  open my $file, '<', $path;
-  my $html = _pod_to_html(join '', <$file>);
+sub _html {
+  my ($self, $src) = @_;
 
   # Rewrite links
-  my $dom = Mojo::DOM->new("$html");
+  my $dom = Mojo::DOM->new(_pod_to_html($src));
   my $doc = $self->url_for( $self->param('url') . '/' );
-  $dom->find('a[href]')->each(
-    sub {
-      my $attrs = shift->attr;
-      $attrs->{href} =~ s!%3A%3A!/!gi
-        if $attrs->{href} =~ s!^http\://search\.cpan\.org/perldoc\?!$doc!;
-    }
-  );
+  for my $e ($dom->find('a[href]')->each) {
+    my $attrs = $e->attr;
+    $attrs->{href} =~ s!%3A%3A!/!gi
+      if $attrs->{href} =~ s!^http://search\.cpan\.org/perldoc\?!$doc!;
+  }
 
-  # Rewrite code blocks for syntax highlighting
-  $dom->find('pre')->each(
-    sub {
-      my $e = shift;
-      return if $e->all_text =~ /^\s*\$\s+/m;
-      my $attrs = $e->attr;
-      my $class = $attrs->{class};
-      $attrs->{class} = defined $class ? "$class prettyprint" : 'prettyprint';
-    }
-  );
+  # Rewrite code blocks for syntax highlighting and correct indentation
+  for my $e ($dom->find('pre')->each) {
+    $e->content(my $str = unindent $e->content);
+    next if $str =~ /^\s*(?:\$|Usage:)\s+/m || $str !~ /[\$\@\%]\w|-&gt;\w/m;
+    my $attrs = $e->attr;
+    my $class = $attrs->{class};
+    $attrs->{class} = defined $class ? "$class prettyprint" : 'prettyprint';
+  }
 
   # Rewrite headers
-  my $url = $self->req->url->clone;
+  my $toc = Mojo::URL->new->fragment('toc');
   my (%anchors, @parts);
-  $dom->find('h1, h2, h3')->each(
-    sub {
-      my $e = shift;
+  for my $e ($dom->find('h1, h2, h3')->each) {
 
-      # Anchor and text
-      my $name = my $text = $e->all_text;
-      $name =~ s/\s+/_/g;
-      $name =~ s/\W//g;
-      my $anchor = $name;
-      my $i      = 1;
-      $anchor = $name . $i++ while $anchors{$anchor}++;
+    # Anchor and text
+    my $name = my $text = $e->all_text;
+    $name =~ s/\s+/_/g;
+    $name =~ s/[^\w\-]//g;
+    my $anchor = $name;
+    my $i      = 1;
+    $anchor = $name . $i++ while $anchors{$anchor}++;
 
-      # Rewrite
-      push @parts, [] if $e->type eq 'h1' || !@parts;
-      push @{$parts[-1]}, $text, $url->fragment($anchor)->to_abs;
-      $e->replace_content(
-        $self->link_to(
-          $text => $url->fragment('toc')->to_abs,
-          class => 'mojoscroll',
-          id    => $anchor
-        )
-      );
-    }
-  );
+    # Rewrite
+    push @parts, [] if $e->type eq 'h1' || !@parts;
+    my $link = Mojo::URL->new->fragment($anchor);
+    push @{$parts[-1]}, $text, $link;
+    my $permalink = $self->link_to('#' => $link, class => 'permalink');
+    $e->content($permalink . $self->link_to($text => $toc, id => $anchor));
+  }
 
   # Try to find a title
   my $title = 'Doc';
@@ -115,24 +90,30 @@ sub _doc {
 
   # Combine everything to a proper response
   $self->content_for(doc => "$dom");
-  $self->render(template => 'doc', title => $title, parts => \@parts);
-  $self->res->headers->content_type('text/html;charset="UTF-8"');
+  $self->render(title => $title, parts => \@parts);
+}
+
+sub _doc {
+  my $self = shift;
+
+  # Find module or redirect to CPAN
+  my $module = $self->param('module');
+  $module =~ s!/!::!g;
+  my $path
+    = Pod::Simple::Search->new->find($module, map { $_, "$_/pods" } @INC);
+  return $self->redirect_to("http://metacpan.org/module/$module")
+    unless $path && -r $path;
+
+  my $src = slurp $path;
+  $self->respond_to(txt => {data => $src}, any => sub { _html($self, $src) });
 }
 
 sub _pod_to_html {
-  return unless defined(my $pod = shift);
+  return '' unless defined(my $pod = ref $_[0] eq 'CODE' ? shift->() : shift);
 
-  # Block
-  $pod = $pod->() if ref $pod eq 'CODE';
-
-  # Parser
   my $parser = Pod::Simple::HTML->new;
-  $parser->force_title('');
-  $parser->html_header_before_title('');
-  $parser->html_header_after_title('');
-  $parser->html_footer('');
-
-  # Parse
+  $parser->$_('') for qw(force_title html_header_before_title);
+  $parser->$_('') for qw(html_header_after_title html_footer);
   $parser->output_string(\(my $output));
   return $@ unless eval { $parser->parse_string_document("$pod"); 1 };
 
@@ -145,7 +126,7 @@ sub _pod_to_html {
 
 1;
 
-__END__
+=encoding utf8
 
 =head1 NAME
 
@@ -186,7 +167,7 @@ Mojolicious::Plugin::DOCRenderer - Doc Renderer Plugin
 
   MyApp - My Mojolicious::Lite Application
 
-  =head1 DESCRIPTION
+=head1 DESCRIPTION
 
   This documentation will be available online, for example from L<http://localhost:3000/doc>.
 

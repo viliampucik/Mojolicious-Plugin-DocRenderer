@@ -1,3 +1,6 @@
+4.00    2014-05-07 00:00:00
+        - Updated against Mojolicious 4.99.
+
 3.02    2013-11-14 00:00:00
         - Changed call to Mojo::DOM->attrs to Mojo::DOM->attr, as the attrs method has been deprecated and now removed (highflying).
 

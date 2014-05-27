@@ -9,7 +9,7 @@ WriteMakefile(
   ABSTRACT     => 'Browses online documentation of your Mojolicious application',
   AUTHOR       => 'Viliam Pucik <viliam.pucik@gmail.com>',
   LICENSE      => 'artistic_2',
-  PREREQ_PM    => {'Mojolicious' => '3.00'},
+  PREREQ_PM    => {'Mojolicious' => '4.99'},
   META_MERGE   => {
     requires  => {perl => '5.010001'},
     resources => {
@@ -20,5 +20,5 @@ WriteMakefile(
     },
     no_index => {directory => ['t']}
   },
-  test         => {TESTS => 't/*.t'}
+  test         => {TESTS => 't/*.pl'}
 );
