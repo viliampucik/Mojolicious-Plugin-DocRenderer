@@ -9,7 +9,7 @@ WriteMakefile(
   ABSTRACT     => 'Browses online documentation of your Mojolicious application',
   AUTHOR       => 'Viliam Pucik <viliam.pucik@gmail.com>',
   LICENSE      => 'artistic_2',
-  PREREQ_PM    => {'Mojolicious' => '4.99'},
+  PREREQ_PM    => {'Mojolicious' => '7.43'},
   META_MERGE   => {
     requires  => {perl => '5.010001'},
     resources => {
