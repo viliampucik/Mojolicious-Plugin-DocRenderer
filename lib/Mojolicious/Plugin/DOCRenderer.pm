@@ -11,7 +11,7 @@ use Mojo::URL;
 use Pod::Simple::XHTML;
 use Pod::Simple::Search;
 
-our $VERSION = '5.00';
+our $VERSION = '5.01';
 
 # "Futurama - The One Bright Spot in Your Life!"
 sub register {
