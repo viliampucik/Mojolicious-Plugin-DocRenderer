@@ -95,7 +95,7 @@
     </style>
   </head>
   <body>
-    %= include 'mojo/menubar'
+    %= include 'menubar'
     <div id="wrapperlicious">
       <div id="doc">
         <div id="source">
